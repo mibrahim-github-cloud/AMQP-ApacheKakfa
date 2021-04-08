@@ -6,7 +6,8 @@ Kafka Message streaming platforms
 <details><summary>Mac</summary>
 <p>
 - Make sure you are navigated inside the bin directory.
-# Start Zookeeper and Kafka Broker
+
+## Start Zookeeper and Kafka Broker
 -   Start up the Zookeeper.
 ```
 ./zookeeper-server-start.sh ../config/zookeeper.properties
