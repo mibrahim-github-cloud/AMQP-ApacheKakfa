@@ -91,6 +91,8 @@ kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic test-topic 
 ```
 </p>
 </details>
+
+
 ## Setting Up Multiple Kafka Brokers
 - The first step is to add a new **server.properties**.
 - We need to modify three properties to start up a multi broker set up.
@@ -160,6 +162,8 @@ auto.create.topics.enable=false
 <details><summary>Windows</summary>
 <p>
 - Make sure you are inside the **bin/windows** directory.
+
+
 ## List the topics in a cluster
 ```
 kafka-topics.bat --zookeeper localhost:2181 --list
