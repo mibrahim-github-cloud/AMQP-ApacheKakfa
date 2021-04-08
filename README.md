@@ -120,6 +120,8 @@ auto.create.topics.enable=false
 # Advanced Kafka CLI operations:
 <details><summary>Mac</summary>
 <p>
+
+
 ## List the topics in a cluster
 ```
 ./kafka-topics.sh --zookeeper localhost:2181 --list
