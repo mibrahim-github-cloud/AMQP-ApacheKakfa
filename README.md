@@ -52,6 +52,8 @@ auto.create.topics.enable=false
 <details><summary>Windows</summary>
 <p>
 - Make sure you are inside the **bin/windows** directory.
+
+
 ## Start Zookeeper and Kafka Broker
 -   Start up the Zookeeper.
 ```
