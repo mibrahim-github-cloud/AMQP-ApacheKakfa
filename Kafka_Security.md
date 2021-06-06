@@ -1,203 +1,98 @@
-# AMQP-ApacheKakfa
-Kafka Message streaming platforms
-
-
-# Setting Up Kafka
-<details><summary>Mac</summary>
-<p>
--   Make sure you are navigated inside the bin directory.
-
-## Start Zookeeper and Kafka Broker
--   Start up the Zookeeper.
+# Enabling SSL in Kafka
+- Follow the below steps for enabling SSL in your local environment
+## Generating the KeyStore
+- The below command is to generate the **keyStore**.
+- KeyStore in general has information about the server and the organization
 ```
-./zookeeper-server-start.sh ../config/zookeeper.properties
+keytool -keystore server.keystore.jks -alias localhost -validity 365 -genkey -keyalg RSA
 ```
-- Add the below properties in the server.properties
+**Example**  
+- After entering all the details the final value will look like below.
 ```
-listeners=PLAINTEXT://localhost:9092
-auto.create.topics.enable=false
+CN=localhost, OU=localhost, O=localhost, L=Chennai, ST=TN, C=IN
 ```
--   Start up the Kafka Broker
+## Generating CA
+- The below command will generate the ca cert(SSL cert) and private key. This is normally needed if we are self signing the request.
 ```
-./kafka-server-start.sh ../config/server.properties
+openssl req -new -x509 -keyout ca-key -out ca-cert -days 365 -subj "/CN=local-security-CA"
 ```
-## How to create a topic ?
+## Certificate Signing Request(CSR)
+- The below command will create a **cert-file** as a result of executing the command.
 ```
-./kafka-topics.sh --create --topic test-topic -zookeeper localhost:2181 --replication-factor 1 --partitions 4
+keytool -keystore server.keystore.jks -alias localhost -certreq -file cert-file
 ```
-## How to instantiate a Console Producer?
-### Without Key
+## Signing the certificate
+- The below command takes care of signing the CSR and then it spits out a file **cert-signed**
 ```
-./kafka-console-producer.sh --broker-list localhost:9092 --topic test-topic
+openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file -out cert-signed -days 365 -CAcreateserial -passin pass:password
 ```
-### With Key
+- To view the content inside the file **cert-signed**, run the below command.
 ```
-./kafka-console-producer.sh --broker-list localhost:9092 --topic test-topic --property "key.separator=-" --property "parse.key=true"
+keytool -printcert -v -file cert-signed
 ```
-## How to instantiate a Console Consumer?
-### Without Key
+## Adding the Signed Cert in to the KeyStore file
 ```
-./kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test-topic --from-beginning
+keytool -keystore server.keystore.jks -alias CARoot -import -file ca-cert
+keytool -keystore server.keystore.jks -alias localhost -import -file cert-signed
 ```
-### With Key
+## Generate the TrustStore
+- The below command takes care of generating the truststore for us and adds the **CA-Cert** in to it.
+- This is to make sure the client is going to trust all the certs issued by CA.
 ```
-./kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test-topic --from-beginning -property "key.separator= - " --property "print.key=true"
+keytool -keystore client.truststore.jks -alias CARoot -import -file ca-cert
 ```
-### With Consumer Group
+## Broker SSL Settings
 ```
-./kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test-topic --group <group-name>
+ssl.keystore.location=<location>/server.keystore.jks
+ssl.keystore.password=password
+ssl.key.password=password
+ssl.endpoint.identification.algorithm=
 ```
-</p>
-</details>
-<details><summary>Windows</summary>
-<p>
-- Make sure you are inside the **bin/windows** directory.
-
-
-## Start Zookeeper and Kafka Broker
--   Start up the Zookeeper.
+# Accessing SSL Enabled Topics using Console Producers/Consumers
+- Create a topic
 ```
-zookeeper-server-start.bat ..\..\config\zookeeper.properties
+./kafka-topics.sh --create --topic test-topic -zookeeper localhost:2181 --replication-factor 1 --partitions 3
 ```
--   Start up the Kafka Broker.
+- Create a file named **client-ssl.properties** and have the below properties configured in there.
 ```
-kafka-server-start.bat ..\..\config\server.properties
+security.protocol=SSL
+ssl.truststore.location=<location>/client.truststore.jks
+ssl.truststore.password=password
+ssl.truststore.type=JKS
 ```
-## How to create a topic ?
+## Producing Messages to Secured Topic
+- Command to Produce Messages to the secured topic
 ```
-kafka-topics.bat --create --topic test-topic -zookeeper localhost:2181 --replication-factor 1 --partitions 4
+./kafka-console-producer.sh --broker-list localhost:9095,localhost:9096,localhost:9097 --topic test-topic --producer.config client-ssl.properties
 ```
-## How to instantiate a Console Producer?
-### Without Key
+## Consuming Messages from a Secured Topic
+- Command to Produce Messages to the secured topic
 ```
-kafka-console-producer.bat --broker-list localhost:9092 --topic test-topic
+./kafka-console-consumer.sh --bootstrap-server localhost:9095,localhost:9096,localhost:9097 --topic test-topic --consumer.config client-ssl.properties
 ```
-### With Key
+## Producing Messages to Non-Secured Topic
 ```
-kafka-console-producer.bat --broker-list localhost:9092 --topic test-topic --property "key.separator=-" --property "parse.key=true"
+./kafka-console-producer.sh --broker-list localhost:9092,localhost:9093,localhost:9094 --topic test-topic
 ```
-## How to instantiate a Console Consumer?
-### Without Key
+## Consuming Messages from a Non-Secured Topic
 ```
-kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic test-topic --from-beginning
+./kafka-console-consumer.sh --bootstrap-server localhost:9092,localhost:9093,localhost:9094 --topic test-topic
 ```
-### With Key
+## 2 Way Authentication
+- This config is to enable the client authentication at the cluster end.
 ```
-kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic test-topic --from-beginning -property "key.separator= - " --property "print.key=true"
+keytool -keystore server.truststore.jks -alias CARoot -import -file ca-cert
 ```
-### With Consumer Group
+- Add the **ssl.client.auth** property in the **server.properties**.
 ```
-kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic test-topic --group <group-name>
+ssl.truststore.location=<location>/server.truststore.jks
+ssl.truststore.password=password
+ssl.client.auth=required
 ```
-</p>
-</details>
-
-
-## Setting Up Multiple Kafka Brokers
-- The first step is to add a new **server.properties**.
-- We need to modify three properties to start up a multi broker set up.
+- Kafka Client should have the following the config in the **client-ssl.properties** file
 ```
-broker.id=<unique-broker-d>
-listeners=PLAINTEXT://localhost:<unique-port>
-log.dirs=/tmp/<unique-kafka-folder>
-auto.create.topics.enable=false
+ssl.keystore.type=JKS
+ssl.keystore.location=<location>/client.keystore.jks
+ssl.keystore.password=password
+ssl.key.password=password
 ```
-- Example config will be like below.
-```
-broker.id=1
-listeners=PLAINTEXT://localhost:9093
-log.dirs=/tmp/kafka-logs-1
-auto.create.topics.enable=false
-```
-### Starting up the new Broker
-- Provide the new **server.properties** thats added.
-```
-./kafka-server-start.sh ../config/server-1.properties
-```
-```
-./kafka-server-start.sh ../config/server-2.properties
-```
-# Advanced Kafka CLI operations:
-<details><summary>Mac</summary>
-<p>
-
-
-## List the topics in a cluster
-```
-./kafka-topics.sh --zookeeper localhost:2181 --list
-```
-## Describe topic
-- The below command can be used to describe all the topics.
-```
-./kafka-topics.sh --zookeeper localhost:2181 --describe
-```
-- The below command can be used to describe a specific topic.
-```
-./kafka-topics.sh --zookeeper localhost:2181 --describe --topic <topic-name>
-```
-## Alter the min insync replica
-```
-./kafka-topics.sh --alter --zookeeper localhost:2181 --topic library-events --config min.insync.replicas=2
-```
-## Delete a topic
-```
-./kafka-topics.sh --zookeeper localhost:2181 --delete --topic test-topic
-```
-## How to view consumer groups
-```
-./kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list
-```
-### Consumer Groups and their Offset
-```
-./kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group console-consumer-27773
-```
-## Viewing the Commit Log
-```
-./kafka-run-class.sh kafka.tools.DumpLogSegments --deep-iteration --files /tmp/kafka-logs/test-topic-0/00000000000000000000.log
-```
-## Setting the Minimum Insync Replica
-```
-./kafka-configs.sh --alter --zookeeper localhost:2181 --entity-type topics --entity-name test-topic --add-config min.insync.replicas=2
-```
-</p>
-</details>
-<details><summary>Windows</summary>
-<p>
-- Make sure you are inside the **bin/windows** directory.
-
-
-## List the topics in a cluster
-```
-kafka-topics.bat --zookeeper localhost:2181 --list
-```
-## Describe topic
-- The below command can be used to describe all the topics.
-```
-kafka-topics.bat --zookeeper localhost:2181 --describe
-```
-- The below command can be used to describe a specific topic.
-```
-kafka-topics.bat --zookeeper localhost:2181 --describe --topic <topic-name>
-```
-## Alter the min insync replica
-```
-kafka-topics.bat --alter --zookeeper localhost:2181 --topic library-events --config min.insync.replicas=2
-```
-## Delete a topic
-```
-kafka-topics.bat --zookeeper localhost:2181 --delete --topic <topic-name>
-```
-## How to view consumer groups
-```
-kafka-consumer-groups.bat --bootstrap-server localhost:9092 --list
-```
-### Consumer Groups and their Offset
-```
-kafka-consumer-groups.bat --bootstrap-server localhost:9092 --describe --group console-consumer-27773
-```
-## Viewing the Commit Log
-```
-kafka-run-class.bat kafka.tools.DumpLogSegments --deep-iteration --files /tmp/kafka-logs/test-topic-0/00000000000000000000.log
-```
-</p>
-</details>
